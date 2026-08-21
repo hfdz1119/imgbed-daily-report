@@ -1,0 +1,40 @@
+{
+  "name": "imgbed-daily-report",
+  "version": "1.0.0",
+  "description": "Independent Telegram daily reports for CloudFlare-ImgBed",
+  "type": "module",
+  "private": false,
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "lint": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "check": "npm run lint && npm test && npm run deploy -- --dry-run"
+  },
+  "keywords": [
+    "cloudflare-worker",
+    "cloudflare-d1",
+    "cloudflare-imgbed",
+    "telegram",
+    "daily-report"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/huijin398-lang/imgbed-daily-report.git"
+  },
+  "homepage": "https://github.com/huijin398-lang/imgbed-daily-report#readme",
+  "bugs": {
+    "url": "https://github.com/huijin398-lang/imgbed-daily-report/issues"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260821.1",
+    "@types/node": "^26.2.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.125.0"
+  }
+}

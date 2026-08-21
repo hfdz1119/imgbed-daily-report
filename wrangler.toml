@@ -1,0 +1,17 @@
+name = "imgbed-daily-report"
+main = "src/index.ts"
+compatibility_date = "2026-08-21"
+workers_dev = true
+
+[vars]
+REPORT_SITE_NAME = "ImgBed"
+REPORT_TIMEZONE = "Asia/Shanghai"
+REPORT_SHOW_CHANNEL_DETAILS = "false"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "YOUR_IMGBED_D1_DATABASE_NAME"
+database_id = "YOUR_IMGBED_D1_DATABASE_ID"
+
+[triggers]
+crons = ["0 12 * * *"]
