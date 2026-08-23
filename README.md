@@ -66,7 +66,7 @@ Telegram：50 个 / 800 MB
 ### 1. Fork 或 Clone
 
 ```bash
-git clone https://github.com/huijin398-lang/imgbed-daily-report.git
+git clone https://github.com/hfdz1119/imgbed-daily-report.git
 cd imgbed-daily-report
 npm install
 ```

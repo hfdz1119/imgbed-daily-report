@@ -24,11 +24,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/huijin398-lang/imgbed-daily-report.git"
+    "url": "https://github.com/hfdz1119/imgbed-daily-report.git"
   },
-  "homepage": "https://github.com/huijin398-lang/imgbed-daily-report#readme",
+  "homepage": "https://github.com/hfdz1119/imgbed-daily-report#readme",
   "bugs": {
-    "url": "https://github.com/huijin398-lang/imgbed-daily-report/issues"
+    "url": "https://github.com/hfdz1119/imgbed-daily-report/issues"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260821.1",
