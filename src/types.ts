@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  REPORT_STATUS?: KVNamespace;
   REPORT_TELEGRAM_BOT_TOKEN?: string;
   REPORT_TELEGRAM_CHAT_ID?: string;
   REPORT_TRIGGER_TOKEN?: string;

@@ -13,5 +13,11 @@ binding = "DB"
 database_name = "YOUR_IMGBED_D1_DATABASE_NAME"
 database_id = "YOUR_IMGBED_D1_DATABASE_ID"
 
+# Delivery monitoring uses a separate KV namespace; create it with
+# `npx wrangler kv namespace create REPORT_STATUS`, then add the returned ID:
+# [[kv_namespaces]]
+# binding = "REPORT_STATUS"
+# id = "YOUR_REPORT_STATUS_KV_NAMESPACE_ID"
+
 [triggers]
 crons = ["0 12 * * *"]

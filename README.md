@@ -16,6 +16,7 @@ ImgBed Daily Report 是一个为 [CloudFlare-ImgBed](https://github.com/MarSeven
 - 长报文优先保留今日合计和当前文件库总览，必要时省略渠道或实例明细
 - 自定义站点名称和 IANA 时区
 - 受 Token 保护的手动测试接口
+- 可选独立 KV 记录最近定时任务和手动任务的尝试、成功和失败时间；`/health` 在日报超过 36 小时未成功或最新尝试失败时返回 HTTP 503
 - 独立 Worker，不修改 CloudFlare-ImgBed
 - 运行时代码仅执行预定义 `SELECT`，不写入 ImgBed 数据库
 - 容量缺失时省略容量，不把未知数据伪装为 `0 B`
@@ -98,14 +99,32 @@ database_id = "你的 ImgBed D1 ID"
 
 日报 Worker 不需要 ImgBed 的 R2、Telegram、Discord、S3、Hugging Face 或 WebDAV 凭据。它只读取统一的 D1 文件记录。
 
-### 4. 创建 Telegram Bot
+### 4. 为送达状态创建独立 KV（推荐）
+
+在部署电脑上创建状态空间：
+
+```bash
+npx wrangler kv namespace create REPORT_STATUS
+```
+
+把命令返回的 namespace ID 加到 `wrangler.toml`：
+
+```toml
+[[kv_namespaces]]
+binding = "REPORT_STATUS"
+id = "你的 KV namespace ID"
+```
+
+该 KV 只保存日报最近尝试、成功和失败的时间戳，与 ImgBed 的 D1 分开；记录保留 90 天。未配置此绑定时，日报仍可发送，但 `/health` 会返回 HTTP 503，表示送达监控未启用。
+
+### 5. 创建 Telegram Bot
 
 1. 在 Telegram 中打开 [@BotFather](https://t.me/BotFather)。
 2. 发送 `/newbot`，按提示设置名称和用户名。
 3. 保存 BotFather 返回的 Bot Token，不要提交到 Git。
 4. 根据下方“Telegram Chat ID 教程”取得目标 Chat ID。
 
-### 5. 创建 Worker 并配置 Secrets
+### 6. 创建 Worker 并配置 Secrets
 
 登录 Cloudflare：
 
@@ -131,7 +150,7 @@ npx wrangler secret put REPORT_TRIGGER_TOKEN
 
 `wrangler secret put` 会为 Worker 发布包含新 Secret 的版本。`REPORT_TRIGGER_TOKEN` 应使用足够长的随机字符串，仅用于保护手动 `/report` 接口。不要把这些值写进 `wrangler.toml`、README 或源码。详见 [Cloudflare Workers Secrets](https://developers.cloudflare.com/workers/configuration/secrets/)。
 
-### 6. 设置普通变量
+### 7. 设置普通变量
 
 默认配置已经写在 `wrangler.toml`：
 
@@ -148,7 +167,7 @@ REPORT_SHOW_CHANNEL_DETAILS = "false"
 REPORT_SITE_NAME = "My Images"
 ```
 
-### 7. 设置 Cron
+### 8. 设置 Cron
 
 默认配置：
 
@@ -161,7 +180,7 @@ Cloudflare Cron 使用 UTC。`0 12 * * *` 是 UTC 12:00，对应北京时间每�
 
 `REPORT_TIMEZONE` 只决定“自然日边界”和日报显示时间，不会自动改变 Cron。如果修改发送时间，必须同时修改 `crons`。
 
-### 8. 检查并部署
+### 9. 检查并部署
 
 ```bash
 npm run lint
@@ -172,7 +191,7 @@ npm run deploy
 
 首次部署会创建名为 `imgbed-daily-report` 的 Worker，并按 `wrangler.toml` 设置 Cron Trigger。
 
-### 9. 手动发送测试日报
+### 10. 手动发送测试日报
 
 不需要等待 Cron。部署后运行：
 
@@ -190,14 +209,14 @@ curl -X POST "https://imgbed-daily-report.<你的-subdomain>.workers.dev/report"
 
 未配置 `REPORT_TRIGGER_TOKEN` 时，手动接口保持关闭并返回 `503`。错误 Token 返回 `401`。Cron 不需要该 Token。
 
-### 10. 查看健康状态和日志
+### 11. 查看健康状态和日志
 
 ```bash
 curl "https://imgbed-daily-report.<你的-subdomain>.workers.dev/health"
 npx wrangler tail
 ```
 
-`/health` 只返回配置状态，不返回 Bot Token、Chat ID 或触发 Token；上次日报成功时间目前仍需从 Worker 日志确认。若要在接口中显示最近成功时间，建议后续用独立 KV 保存运行状态，不要写入上游 ImgBed D1。
+`/health` 不返回 Bot Token、Chat ID 或触发 Token。配置 `REPORT_STATUS` 后，它会返回最近定时任务和手动任务的尝试、成功和失败时间；若没有成功记录、成功时间超过 36 小时，或最近一次尝试失败，会返回 HTTP 503。健康状态只以定时任务为准，手动测试不会掩盖错过的日报；36 小时为每日 20:00 Cron 留出的 12 小时缓冲。可将 `/health` 接到外部可用性监控服务，以便在收到 503 时告警；Worker 本身不会额外发送告警消息。状态只保存在独立 KV，不写入 ImgBed D1。
 
 ## Telegram Chat ID 教程
 
@@ -240,10 +259,11 @@ npx wrangler tail
 | Binding | 必填 | 作用 |
 |---|---:|---|
 | `DB` | 是 | 绑定用户现有的 CloudFlare-ImgBed D1 数据库 |
+| `REPORT_STATUS` | 否 | 独立 KV namespace，用于保存最近日报送达状态 |
 
 ## 数据读取与隐私
 
-运行时代码只执行两个预定义查询：
+运行时代码对 ImgBed D1 只执行两个预定义查询，另向独立 `REPORT_STATUS` KV 写入日报运行时间戳：
 
 - 今日按 `channel`、`channel_name` 聚合
 - 当前图库总体聚合
