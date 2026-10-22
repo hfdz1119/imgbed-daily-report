@@ -46,18 +46,28 @@ function logUnknownCapacity(scope: string, summary: SizeSummary): void {
   }
 }
 
-function fitTelegramMessage(lines: string[]): string {
+function fitTelegramMessage(
+  prefix: string[],
+  channelBlocks: string[][],
+  gallery: string[],
+): string {
   const footer = ["", "✅ 日报生成正常"];
-  const complete = [...lines, ...footer].join("\n");
+  const channelLines = channelBlocks.flat();
+  const complete = [...prefix, ...channelLines, ...gallery, ...footer].join("\n");
   if (complete.length <= TELEGRAM_MESSAGE_LIMIT) return complete;
 
-  const suffix = ["", "ℹ️ 内容过长，部分渠道或明细已省略", ...footer];
+  const omission = "ℹ️ 内容过长，部分渠道或明细已省略";
   const kept: string[] = [];
-  for (const line of lines) {
-    if ([...kept, line, ...suffix].join("\n").length > TELEGRAM_MESSAGE_LIMIT) break;
-    kept.push(line);
+  for (const [summary, ...details] of channelBlocks) {
+    const summaryCandidate = [...prefix, ...kept, summary, omission, ...gallery, ...footer].join("\n");
+    if (summaryCandidate.length > TELEGRAM_MESSAGE_LIMIT) continue;
+    kept.push(summary);
+
+    const detailCandidate = [...prefix, ...kept, ...details, omission, ...gallery, ...footer].join("\n");
+    if (detailCandidate.length <= TELEGRAM_MESSAGE_LIMIT) kept.push(...details);
   }
-  return [...kept, ...suffix].join("\n");
+
+  return [...prefix, ...kept, omission, ...gallery, ...footer].join("\n");
 }
 
 export function buildDailyReport(
@@ -69,37 +79,35 @@ export function buildDailyReport(
   if (stats.gallery) logUnknownCapacity("Gallery", stats.gallery);
   for (const channel of stats.channels) logUnknownCapacity(`Channel ${channel.key}`, channel);
 
-  const lines = [
+  const prefix = [
     `📊 ${config.siteName} 每日汇报`,
     formatReportTimestamp(generatedAt, config.timezone),
     "",
-    "📤 今日上传",
+    "📤 今日新增文件（截至报告时间，仍在库）",
     `文件：${countText(stats.today.fileCount)} 个`,
   ];
 
   if (stats.today.totalBytes !== null) {
-    lines.push(`容量：${formatBytes(stats.today.totalBytes)}`);
+    prefix.push(`容量：${formatBytes(stats.today.totalBytes)}`);
   }
 
-  lines.push("", "💾 存储分布");
-  if (stats.channels.length === 0) {
-    lines.push("今日暂无上传");
-  } else {
-    for (const channel of stats.channels) {
-      lines.push(summaryLine(channel.displayName, channel));
-      if (config.showChannelDetails) lines.push(...detailLines(channel.instances));
-    }
-  }
+  prefix.push("", "💾 存储分布");
+  const channelBlocks = stats.channels.length === 0
+    ? [["今日暂无上传"]]
+    : stats.channels.map((channel) => [
+      summaryLine(channel.displayName, channel),
+      ...(config.showChannelDetails ? detailLines(channel.instances) : []),
+    ]);
 
-  lines.push("", "📚 当前图库");
+  const gallery = ["", "📚 当前文件库"];
   if (!stats.gallery) {
-    lines.push("统计暂不可用");
+    gallery.push("统计暂不可用");
   } else {
-    lines.push(`文件总数：${countText(stats.gallery.fileCount)}`);
+    gallery.push(`文件总数：${countText(stats.gallery.fileCount)}`);
     if (stats.gallery.totalBytes !== null) {
-      lines.push(`总容量：${formatBytes(stats.gallery.totalBytes)}`);
+      gallery.push(`总容量：${formatBytes(stats.gallery.totalBytes)}`);
     }
   }
 
-  return fitTelegramMessage(lines);
+  return fitTelegramMessage(prefix, channelBlocks, gallery);
 }

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { sendTelegramMessage } from "../src/telegram.ts";
 
-test("retries once after Telegram returns ok:false", async () => {
+test("retries once after an explicit Telegram 429 rate limit", async () => {
   let attempts = 0;
   const fetcher = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     attempts += 1;
@@ -12,7 +12,10 @@ test("retries once after Telegram returns ok:false", async () => {
     assert.equal(body.text, "report");
 
     if (attempts === 1) {
-      return Response.json({ ok: false, description: "temporary failure" }, { status: 500 });
+      return Response.json(
+        { ok: false, description: "Too Many Requests", parameters: { retry_after: 1 } },
+        { status: 429 },
+      );
     }
     return Response.json({ ok: true, result: { message_id: 1 } });
   };
@@ -25,7 +28,25 @@ test("retries once after Telegram returns ok:false", async () => {
   assert.equal(attempts, 2);
 });
 
-test("fails after two unsuccessful Telegram attempts", async () => {
+test("does not retry an ambiguous server error", async () => {
+  let attempts = 0;
+  const fetcher = async (): Promise<Response> => {
+    attempts += 1;
+    return Response.json({ ok: false, description: "temporary failure" }, { status: 500 });
+  };
+
+  await assert.rejects(
+    sendTelegramMessage(
+      { botToken: "[REDACTED_SECRET]", chatId: "[REDACTED_CHAT_ID]" },
+      "report",
+      { fetcher: fetcher as typeof fetch },
+    ),
+    /temporary failure/,
+  );
+  assert.equal(attempts, 1);
+});
+
+test("does not retry an explicit non-rate-limit Telegram rejection", async () => {
   let attempts = 0;
   const fetcher = async (): Promise<Response> => {
     attempts += 1;
@@ -36,11 +57,11 @@ test("fails after two unsuccessful Telegram attempts", async () => {
     sendTelegramMessage(
       { botToken: "[REDACTED_SECRET]", chatId: "[REDACTED_CHAT_ID]" },
       "report",
-      { fetcher: fetcher as typeof fetch, retryDelayMs: 0 },
+      { fetcher: fetcher as typeof fetch },
     ),
     /bad chat/,
   );
-  assert.equal(attempts, 2);
+  assert.equal(attempts, 1);
 });
 
 test("redacts Telegram configuration from transport errors", async () => {
@@ -54,7 +75,7 @@ test("redacts Telegram configuration from transport errors", async () => {
     sendTelegramMessage(
       { botToken, chatId },
       "report",
-      { fetcher: fetcher as typeof fetch, retryDelayMs: 0 },
+      { fetcher: fetcher as typeof fetch },
     ),
     (error: Error) => {
       assert.doesNotMatch(error.message, /sensitive-bot-token|sensitive-chat-id/);

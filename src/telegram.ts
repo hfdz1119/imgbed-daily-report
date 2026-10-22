@@ -3,6 +3,19 @@ import type { TelegramConfig } from "./types.ts";
 interface TelegramResponse {
   ok?: boolean;
   description?: string;
+  parameters?: { retry_after?: number };
+}
+
+class TelegramApiError extends Error {
+  readonly status: number;
+  readonly retryAfterSeconds?: number;
+
+  constructor(message: string, status: number, retryAfterSeconds?: number) {
+    super(message);
+    this.name = "TelegramApiError";
+    this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
 }
 
 interface TelegramSendOptions {
@@ -12,7 +25,7 @@ interface TelegramSendOptions {
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
-const DEFAULT_RETRY_DELAY_MS = 750;
+const MAX_RATE_LIMIT_RETRY_DELAY_MS = 30_000;
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -51,11 +64,12 @@ async function sendOnce(
     );
 
     const result = (await response.json().catch(() => ({}))) as TelegramResponse;
-    if (!response.ok) {
-      throw new Error(result.description || `Telegram sendMessage returned HTTP ${response.status}`);
-    }
-    if (result.ok !== true) {
-      throw new Error(result.description || "Telegram sendMessage returned ok:false");
+    if (!response.ok || result.ok !== true) {
+      throw new TelegramApiError(
+        result.description || `Telegram sendMessage returned HTTP ${response.status}`,
+        response.status,
+        result.parameters?.retry_after,
+      );
     }
   } catch (error) {
     if (controller.signal.aborted) {
@@ -74,19 +88,37 @@ export async function sendTelegramMessage(
 ): Promise<void> {
   const fetcher = options.fetcher ?? fetch;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const retryDelayMs = options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
-  let lastError: unknown;
 
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    try {
-      await sendOnce(config, text, fetcher, timeoutMs);
-      return;
-    } catch (error) {
-      lastError = sanitizeTelegramError(error, config);
-      console.warn(`Telegram send attempt ${attempt} failed:`, lastError);
-      if (attempt === 1 && retryDelayMs > 0) await delay(retryDelayMs);
+  try {
+    await sendOnce(config, text, fetcher, timeoutMs);
+  } catch (error) {
+    const retryAfterSeconds = error instanceof TelegramApiError && error.status === 429
+      ? error.retryAfterSeconds
+      : undefined;
+    const retryDelayMs = options.retryDelayMs ?? (retryAfterSeconds === undefined
+      ? Number.POSITIVE_INFINITY
+      : retryAfterSeconds * 1000);
+
+    if (
+      Number.isSafeInteger(retryAfterSeconds)
+      && retryAfterSeconds! > 0
+      && retryDelayMs >= 0
+      && retryDelayMs <= MAX_RATE_LIMIT_RETRY_DELAY_MS
+    ) {
+      console.warn(`Telegram rate-limited the report; retrying once after ${retryDelayMs} ms.`);
+      await delay(retryDelayMs);
+      try {
+        await sendOnce(config, text, fetcher, timeoutMs);
+        return;
+      } catch (retryError) {
+        const safeError = sanitizeTelegramError(retryError, config);
+        console.warn("Telegram rate-limit retry failed:", safeError);
+        throw safeError;
+      }
     }
-  }
 
-  throw lastError instanceof Error ? lastError : new Error("Telegram sendMessage failed");
+    const safeError = sanitizeTelegramError(error, config);
+    console.warn("Telegram send failed without retry:", safeError);
+    throw safeError;
+  }
 }

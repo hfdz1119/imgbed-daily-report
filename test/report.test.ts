@@ -37,7 +37,8 @@ test("builds the Chinese report and omits unknown capacity", () => {
   const report = buildDailyReport(config, stats, new Date("2026-08-21T12:00:00.000Z"));
   assert.match(report, /^📊 ABC ImgBed 每日汇报\n2026-08-21 20:00/);
   assert.match(report, /文件：3 个/);
-  assert.doesNotMatch(report, /📤 今日上传\n文件：3 个\n容量：/);
+  assert.match(report, /📤 今日新增文件（截至报告时间，仍在库）\n文件：3 个/);
+  assert.doesNotMatch(report, /📤 今日新增文件（截至报告时间，仍在库）\n文件：3 个\n容量：/);
   assert.match(report, /S3：3 个\n  ├─ AWS：2 个 \/ 3 MB\n  └─ MinIO：1 个/);
   assert.match(report, /文件总数：1,286\n总容量：18.42 GB/);
   assert.match(report, /✅ 日报生成正常$/);
@@ -71,5 +72,6 @@ test("keeps dynamic detail reports within Telegram's message limit", () => {
 
   assert.ok(report.length <= 4096);
   assert.match(report, /部分渠道或明细已省略/);
+  assert.match(report, /📚 当前文件库\n文件总数：100\n总容量：100 KB/);
   assert.match(report, /✅ 日报生成正常$/);
 });

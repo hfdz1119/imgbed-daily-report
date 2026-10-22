@@ -2,17 +2,18 @@
 
 ImgBed Daily Report 是一个为 [CloudFlare-ImgBed](https://github.com/MarSeventh/CloudFlare-ImgBed) 开发的独立 Telegram 日报扩展。
 
-它以独立 Cloudflare Worker 运行，通过只读 SQL 查询用户现有的 ImgBed D1 数据库，按配置时区生成当天上传统计和当前图库统计，再通过 Telegram Bot 发送。
+它以独立 Cloudflare Worker 运行，通过只读 SQL 查询用户现有的 ImgBed D1 数据库，按配置时区统计当天新增且仍保留在库中的文件，并生成当前文件库概览，再通过 Telegram Bot 发送。
 
 > 本项目是 CloudFlare-ImgBed 的社区生态扩展，不是 CloudFlare-ImgBed 官方核心组件，也不会修改其主项目代码。
 
 ## 功能
 
-- 当地自然日 `00:00 → 执行时刻` 的上传文件数与新增容量
-- 当前图库文件总数与总容量
+- 当地自然日 `00:00 → 报告生成时刻` 的新增文件数与元数据容量；统计仅包括报告时仍有 D1 记录的文件
+- 当前文件库的文件总数与元数据容量
 - 从 `files.channel` 动态识别实际存在的存储渠道
 - 可选的 `channel_name` 多实例明细
-- Telegram 定时日报，失败时简单重试一次
+- Telegram 定时日报，仅对明确返回的 `429` 限流按 `retry_after` 重试一次；网络超时、断连和其他不确定失败不自动重发，避免重复日报
+- 长报文优先保留今日合计和当前文件库总览，必要时省略渠道或实例明细
 - 自定义站点名称和 IANA 时区
 - 受 Token 保护的手动测试接口
 - 独立 Worker，不修改 CloudFlare-ImgBed
@@ -43,6 +44,8 @@ WebDAV：5 个 / 78.8 MB
 
 ✅ 日报生成正常
 ```
+
+日报的时间戳是生成时刻。默认 Cron 在北京时间 20:00 运行，因此“今日”统计是当天 `00:00` 到 20:00 的范围，不代表完整自然日。由于上游 D1 保存的是当前文件记录，日内上传后又删除的文件不会留在此统计中；容量来自文件元数据，不等于 R2、S3 等存储服务的计费容量。
 
 启用渠道明细后：
 
@@ -194,7 +197,7 @@ curl "https://imgbed-daily-report.<你的-subdomain>.workers.dev/health"
 npx wrangler tail
 ```
 
-`/health` 只返回配置状态，不返回 Bot Token、Chat ID 或触发 Token。
+`/health` 只返回配置状态，不返回 Bot Token、Chat ID 或触发 Token；上次日报成功时间目前仍需从 Worker 日志确认。若要在接口中显示最近成功时间，建议后续用独立 KV 保存运行状态，不要写入上游 ImgBed D1。
 
 ## Telegram Chat ID 教程
 
