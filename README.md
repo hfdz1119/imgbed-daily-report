@@ -16,6 +16,7 @@ ImgBed Daily Report 是一个为 [CloudFlare-ImgBed](https://github.com/MarSeven
 - 长报文优先保留今日合计和当前文件库总览，必要时省略渠道或实例明细
 - 自定义站点名称和 IANA 时区
 - 受 Token 保护的手动测试接口
+- Telegram 只读小程序：查看今日新增、当前图库总量与存储渠道汇总
 - 独立 Worker，不修改 CloudFlare-ImgBed
 - 运行时代码仅执行预定义 `SELECT`，不写入 ImgBed 数据库
 - 容量缺失时省略容量，不把未知数据伪装为 `0 B`
@@ -199,6 +200,14 @@ npx wrangler tail
 
 `/health` 只返回配置状态，不返回 Bot Token、Chat ID 或触发 Token；上次日报成功时间目前仍需从 Worker 日志确认。若要在接口中显示最近成功时间，建议后续用独立 KV 保存运行状态，不要写入上游 ImgBed D1。
 
+## 在 Telegram 里打开只读图床概览
+
+部署包含小程序的版本后，Telegram Web App 页面使用 Worker 的 HTTPS 地址 `/miniapp`，统计接口只返回今日上传数、当前图库汇总和按存储渠道聚合的数据；不会返回图片 URL、文件名或渠道实例明细，也不提供修改操作。
+
+访问权限会先验证 Telegram 签名的启动数据，再检查用户 ID。若 `REPORT_TELEGRAM_ALLOWED_USER_IDS` 配了逗号分隔的数字 ID，就只允许名单中的账号；若未配置，只有在 `REPORT_TELEGRAM_CHAT_ID` 是正数的私聊 ID 时，才默认允许那个私聊用户。群组或频道不会自动获得查看权限，需要显式配置允许的个人 Telegram 用户 ID。没有有效允许名单时，数据接口默认关闭。
+
+要把入口加到机器人私聊菜单：在 Telegram 打开 [@BotFather](https://t.me/BotFather)，用 `/mybots` 选中机器人，再到 **Bot Settings → Menu Button → Configure Menu Button**，按钮文字填“图床数据”，网址填部署后的 `https://<你的-worker-域名>/miniapp`。Telegram 的菜单 Web App 入口需要 HTTPS，并在和机器人的私聊中使用。
+
 ## Telegram Chat ID 教程
 
 ### 私聊
@@ -233,6 +242,7 @@ npx wrangler tail
 | `REPORT_TELEGRAM_BOT_TOKEN` | Secret | 是 | 无 | Telegram Bot Token |
 | `REPORT_TELEGRAM_CHAT_ID` | Secret | 是 | 无 | 接收日报的私聊、群组或频道 ID |
 | `REPORT_TRIGGER_TOKEN` | Secret | 手动接口必填 | 无 | 保护 `POST /report` |
+| `REPORT_TELEGRAM_ALLOWED_USER_IDS` | Variable | 否 | 私聊时回退到 `REPORT_TELEGRAM_CHAT_ID` | 允许打开图床小程序的 Telegram 用户 ID，逗号分隔 |
 | `REPORT_SITE_NAME` | Variable | 否 | `ImgBed` | 日报标题中的站点名称 |
 | `REPORT_TIMEZONE` | Variable | 否 | `Asia/Shanghai` | IANA 时区，决定自然日边界与显示时间 |
 | `REPORT_SHOW_CHANNEL_DETAILS` | Variable | 否 | `false` | 是否显示 `channel_name` 实例明细 |

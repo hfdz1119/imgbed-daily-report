@@ -2,6 +2,7 @@ export interface Env {
   DB: D1Database;
   REPORT_TELEGRAM_BOT_TOKEN?: string;
   REPORT_TELEGRAM_CHAT_ID?: string;
+  REPORT_TELEGRAM_ALLOWED_USER_IDS?: string;
   REPORT_TRIGGER_TOKEN?: string;
   REPORT_SITE_NAME?: string;
   REPORT_TIMEZONE?: string;
