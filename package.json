@@ -31,7 +31,7 @@
     "url": "https://github.com/hfdz1119/imgbed-daily-report/issues"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260821.1",
+    "@cloudflare/workers-types": "^5.20261026.1",
     "@types/node": "^26.2.0",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
